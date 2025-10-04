@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.20.0/axios.min.js" integrity="sha512-quHCp3WbBNkwLfYUMd+KwBAgpVukJu5MncuQaWXgCrfgcxCJAq/fo+oqrRKOj+UKEmyMCG3tb8RB63W+EmrOBg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+    <div class="container-fluid">
+
+        <h1 class="row">Login</h1>
+
+        <main>
+            <div class="row">
+                <label for="username">Username</label>
+                <input type="text" name="username" id="username">
+            </div>
+
+            <div class="row">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password">
+            </div>
+
+            <div>
+                <button onclick="login()">Login</button>
+                <button onclick="getDashboard()">Get Dashboard</button>
+                <button onclick="getSettings()">Get Settings</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function navigate(route, content) {
+            history.pushState({}, "", route); 
+            document.querySelector('h1.row').innerHTML = route.charAt(1).toUpperCase() + route.slice(2);
+            document.querySelector('main').innerHTML = content;
+        }
+
+        function login() {
+            const data = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+            };
+            console.log('Attempting login with:', data);
+            axios.post('http://localhost:3000/api/login', data)
+                .then(res => {
+                    console.log('Login response:', res);
+                    document.getElementById('username').value = '';
+                    document.getElementById('password').value = '';
+                    if (res && res.data && res.data.success) {
+                        const token = res.data.token;
+                        localStorage.setItem('jwt', token);
+                        console.log('Token stored, calling getDashboard()');
+                        getDashboard();
+                    } else {
+                        alert('Login failed: ' + (res.data.err || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Login error:', err);
+                    alert('Login failed: ' + (err.response?.data?.err || err.message));
+                });
+        }
+
+        function getDashboard() {
+            const token = localStorage.getItem('jwt');
+            console.log('Getting dashboard with token:', token);
+            axios.get('http://localhost:3000/api/dashboard', {
+                headers: { 
+                    Authorization: `Bearer ${token}` 
+                }
+            }).then(res => {
+                console.log('Dashboard response:', res);
+                if (res && res.data && res.data.success) {
+                    console.log('Navigating to dashboard with content:', res.data.myContent);
+                    navigate('/dashboard', res.data.myContent);
+                } else {
+                    alert('Dashboard failed: ' + (res.data.err || 'Unknown error'));
+                }
+            }).catch(err => {
+                console.error('Dashboard error:', err);
+                handleJwtError(err);
+            })
+        }
+
+        function getSettings() {
+            const token = localStorage.getItem('jwt');
+            console.log('Getting settings with token:', token);
+            axios.get('http://localhost:3000/api/settings', {
+                headers: { Authorization: `Bearer ${token}` }
+            }).then(res => {
+                console.log('Settings response:', res);
+                if (res && res.data && res.data.success) {
+                    console.log('Navigating to settings with content:', res.data.myContent);
+                    navigate('/settings', res.data.myContent);
+                } else {
+                    alert('Settings failed: ' + (res.data.err || 'Unknown error'));
+                }
+            }).catch(err => {
+                console.error('Settings error:', err);
+                handleJwtError(err);
+            })
+        }
+
+        function handleJwtError(err) {
+            console.log('Handling JWT error:', err);
+            console.log('Error response status:', err.response?.status);
+            
+            if (err.response && err.response.status === 401) {
+                console.log('JWT token expired or invalid - forcing logout');
+                localStorage.removeItem('jwt');
+                
+                // Force immediate logout and show login form
+                console.log('Showing login form...');
+                showLoginForm();
+                
+                // Reset URL to root
+                history.pushState({}, "", "/");
+                
+                // Show alert after UI reset
+                setTimeout(() => {
+                    alert('Your session has expired. Please login again.');
+                }, 200);
+                
+            } else {
+                console.error('Other error:', err);
+                alert('An error occurred: ' + (err.message || 'Unknown error'));
+            }
+        }
+
+        // Handle browser back/forward buttons
+        window.onpopstate = function () {
+            const path = window.location.pathname;
+            const fullUrl = window.location.href;
+            console.log('Navigation to path:', path);
+            console.log('Full URL:', fullUrl);
+            
+            // Handle login.html redirect (shouldn't happen but let's catch it)
+            if (fullUrl.includes('login.html')) {
+                console.log('Detected login.html redirect, fixing...');
+                history.replaceState({}, "", "/");
+                showLoginForm();
+                return;
+            }
+            
+            if (path === "/dashboard") {
+                getDashboard();
+            } else if (path === "/settings") {
+                getSettings();
+            } else {
+                // Reset to login page
+                console.log('Resetting to login form for path:', path);
+                showLoginForm();
+            }
+        }
+
+        // Function to show the login form
+        function showLoginForm() {
+            document.querySelector('h1.row').innerHTML = 'Login';
+            document.querySelector('main').innerHTML = `
+                <div class="row">
+                    <label for="username">Username</label>
+                    <input type="text" name="username" id="username">
+                </div>
+                <div class="row">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password">
+                </div>
+                <div>
+                    <button onclick="login()">Login</button>
+                    <button onclick="getDashboard()">Get Dashboard</button>
+                    <button onclick="getSettings()">Get Settings</button>
+                </div>
+            `;
+        }
+
+        // Check if user has valid token on page load
+        function checkTokenOnLoad() {
+            const token = localStorage.getItem('jwt');
+            if (token) {
+                console.log('Token found on load, validating...');
+                // Validate token by making a test API call
+                validateTokenAndShowPage();
+            } else {
+                console.log('No token found on load');
+                showLoginForm();
+            }
+        }
+
+        // Validate token and show appropriate page
+        function validateTokenAndShowPage() {
+            const token = localStorage.getItem('jwt');
+            
+            // Make a simple API call to validate token
+            axios.get('http://localhost:3000/api/dashboard', {
+                headers: { 
+                    Authorization: `Bearer ${token}` 
+                }
+            }).then(res => {
+                console.log('Token is valid, showing dashboard');
+                if (res && res.data && res.data.success) {
+                    // Token is valid, show dashboard
+                    navigate('/dashboard', res.data.myContent);
+                } else {
+                    // Unexpected response, show login
+                    showLoginForm();
+                }
+            }).catch(err => {
+                console.log('Token validation failed, showing login form');
+                // Token is invalid/expired, clear it and show login
+                localStorage.removeItem('jwt');
+                showLoginForm();
+                // No need to show alert on page load, just silently redirect to login
+            });
+        }
+
+        // Function to test token expiration (for testing purposes)
+        function testTokenExpiration() {
+            console.log('Testing token expiration...');
+            // Simulate an expired token by making a request with no token
+            localStorage.removeItem('jwt');
+            getDashboard();
+        }
+
+        // Initialize the app when page loads
+        window.onload = function() {
+            console.log('Page loaded, checking authentication...');
+            checkTokenOnLoad();
+        }
+    </script>
+</body>
+</html>
